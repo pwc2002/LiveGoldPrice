@@ -38,7 +38,7 @@ export default function Home() {
     dots: false,
     arrows: false,
     infinite: true,
-    autoplay: false,
+    autoplay: true,
     autoplaySpeed: 5000,
     speed: 500,
     slidesToShow: 1,
