@@ -18,7 +18,7 @@ export default function Home() {
 
   const fetchData = async () => {
     const response = await axios.get('https://prod-image.koreagoldx.co.kr/price.json?{%22srchDt%22%20:%20%22TODAY%22,%22type%22%20:%20%22Au%22}');
-    setGold(["순금시세", response.data.lineUpVal[0].spure, response.data.lineUpVal[0].ppure]);
+    setGold(["순금(24K) 시세", response.data.lineUpVal[0].spure, response.data.lineUpVal[0].ppure]);
     setGold18k(["18K 금시세", response.data.lineUpVal[0].s18k, response.data.lineUpVal[0].p18k]);
     setGold14k(["14K 금시세", response.data.lineUpVal[0].s14k, response.data.lineUpVal[0].p14k]);
     setWhitegold(["백금시세", response.data.lineUpVal[0].swhite, response.data.lineUpVal[0].pwhite]);
@@ -30,14 +30,15 @@ export default function Home() {
 
     const intervalId = setInterval(fetchData, 60000); // 1분마다 fetchData 함수를 실행합니다.
 
-    return () => clearInterval(intervalId); // 컴포넌트가 언마운트될 때 인터벌을 정리합니다.
+    return () => {
+      clearInterval(intervalId)}; // 컴포넌트가 언마운트될 때 인터벌을 정리합니다.
   }, []);
 
   const settings = {
     dots: false,
     arrows: false,
     infinite: true,
-    autoplay: true,
+    autoplay: false,
     autoplaySpeed: 5000,
     speed: 500,
     slidesToShow: 1,
@@ -47,7 +48,7 @@ export default function Home() {
     }
   }
   return (
-    <>
+    <div className="relative">
       <Slider {...settings} className="flex h-screen">
           <Modal data={gold} />
           <Modal data={gold18k} />
@@ -55,6 +56,6 @@ export default function Home() {
           <Modal data={whitegold} />
           <Modal data={silver} />
       </Slider>
-    </>
+    </div>
   )
 }
