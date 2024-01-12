@@ -18,11 +18,11 @@ export default function Home() {
 
   const fetchData = async () => {
     const response = await axios.get('https://prod-image.koreagoldx.co.kr/price.json?{%22srchDt%22%20:%20%22TODAY%22,%22type%22%20:%20%22Au%22}');
-    setGold(["순금(24K) 시세", response.data.lineUpVal[0].spure, response.data.lineUpVal[0].ppure]);
-    setGold18k(["18K 금시세", response.data.lineUpVal[0].s18k, response.data.lineUpVal[0].p18k]);
-    setGold14k(["14K 금시세", response.data.lineUpVal[0].s14k, response.data.lineUpVal[0].p14k]);
-    setWhitegold(["백금시세", response.data.lineUpVal[0].swhite, response.data.lineUpVal[0].pwhite]);
-    setSilver(["은시세", response.data.lineUpVal[0].ssilver, response.data.lineUpVal[0].psilver]);
+    setGold(["순금(24K) 시세", response.data.lineUpVal[0].spure, response.data.lineUpVal[0].ppure, response.data.lineUpVal[0].turmPure, response.data.lineUpVal[0].pturmPure, response.data.lineUpVal[0].updownPure,response.data.lineUpVal[0].pupdownPure]);
+    setGold18k(["18K 금시세", 0, response.data.lineUpVal[0].p18k, response.data.lineUpVal[0].turm18k, response.data.lineUpVal[0].pturm18k, response.data.lineUpVal[0].updown18k, response.data.lineUpVal[0].pupdown18k]);
+    setGold14k(["14K 금시세", 0, response.data.lineUpVal[0].p14k, response.data.lineUpVal[0].turm14k, response.data.lineUpVal[0].pturm14k, response.data.lineUpVal[0].updown14k, response.data.lineUpVal[0].pupdown14k]);
+    setWhitegold(["백금시세", response.data.lineUpVal[0].swhite, response.data.lineUpVal[0].pwhite, response.data.lineUpVal[0].turmWhite, response.data.lineUpVal[0].pturmWhite, response.data.lineUpVal[0].updownWhite, response.data.lineUpVal[0].pupdownWhite]);
+    setSilver(["은시세", response.data.lineUpVal[0].ssilver, response.data.lineUpVal[0].psilver, response.data.lineUpVal[0].turmSilver, response.data.lineUpVal[0].pturmSilver, response.data.lineUpVal[0].updownSilver, response.data.lineUpVal[0].pupdownSilver]);
   };
 
   useEffect(() => {
@@ -39,7 +39,7 @@ export default function Home() {
     arrows: false,
     infinite: true,
     autoplay: true,
-    autoplaySpeed: 5000,
+    autoplaySpeed: 10000,
     speed: 500,
     slidesToShow: 1,
     slidesToScroll: 1,
