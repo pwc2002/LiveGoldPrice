@@ -65,14 +65,15 @@ export default function Home() {
             <Modal data={silver} />
         </Slider>
       </div>
-      <button onClick={onPlayVideo} className="flex text-6xl">Play</button>
+      <button onClick={onPlayVideo} className="flex text-6xl bg-slate-600 w-full">Play</button>
+      {playing ? 'Playing' : 'Not playing'}
       <ReactPlayer
         ref={playerRef}
         url='https://www.youtube.com/watch?v=O3oWeOsgGpA'
         playing={playing}
         controls={true}
-        width="0%"
-        height="0%"
+        width="10%"
+        height="10%"
       />
       </>
   )
