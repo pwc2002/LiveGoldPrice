@@ -2,10 +2,11 @@
 
 import Slider from "react-slick";
 import axios from 'axios';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
 import Modal from "./Modal";
+import ReactPlayer from "react-player";
 
 
 export default function Home() {
@@ -14,6 +15,8 @@ export default function Home() {
   const [gold14k, setGold14k] = useState([]);
   const [whitegold, setWhitegold] = useState([]);
   const [silver, setSilver] = useState([]);
+  const [playing, setPlaying] = useState(false);
+  const playerRef = useRef(null);
 
 
   const fetchData = async () => {
@@ -47,15 +50,30 @@ export default function Home() {
       console.log(`Slide changed from: ${current} to ${next} at: ${new Date().getTime()}`);
     }
   }
+
+  const onPlayVideo = () => {
+    setPlaying(true);
+  };
   return (
-    <div className="relative">
-      <Slider {...settings} className="flex h-screen">
-          <Modal data={gold} />
-          <Modal data={gold18k} />
-          <Modal data={gold14k} />
-          <Modal data={whitegold} />
-          <Modal data={silver} />
-      </Slider>
-    </div>
+    <>
+      <div className="relative">
+        <Slider {...settings} className="flex h-screen">
+            <Modal data={gold} />
+            <Modal data={gold18k} />
+            <Modal data={gold14k} />
+            <Modal data={whitegold} />
+            <Modal data={silver} />
+        </Slider>
+      </div>
+      <button onClick={onPlayVideo} className="flex text-6xl">Play</button>
+      <ReactPlayer
+        ref={playerRef}
+        url='https://www.youtube.com/watch?v=O3oWeOsgGpA'
+        playing={playing}
+        controls={true}
+        width="0%"
+        height="0%"
+      />
+      </>
   )
 }
