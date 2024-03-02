@@ -69,7 +69,7 @@ export default function Home() {
       {playing ? 'Playing' : 'Not playing'}
       <ReactPlayer
         ref={playerRef}
-        url='https://www.youtube.com/watch?v=O3oWeOsgGpA'
+        url='https://www.youtube.com/watch?v=JVocS7Yftw8&list=PLVefncH6MagHe1l-uPB5jWUeDQokGUlyG'
         playing={playing}
         controls={true}
         width="10%"
