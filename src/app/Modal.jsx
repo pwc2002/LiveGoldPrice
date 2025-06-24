@@ -1,13 +1,19 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
 function Modal({data}){
+    const [formattedDate, setFormattedDate] = useState('');
+    
+    useEffect(() => {
+        const currentDate = new Date(); // 현재 날짜 가져오기
+        const formatted = `${currentDate.getFullYear()}-${String(currentDate.getMonth()+1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`; // 년-월-일 형식으로 날짜 포맷하기
+        setFormattedDate(formatted);
+    }, []);
+
     console.log(data);
     if (!data) {
         return <></>;
     }
 
-    const currentDate = new Date(); // 현재 날짜 가져오기
-    const formattedDate = `${currentDate.getFullYear()}-${String(currentDate.getMonth()+1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`; // 년-월-일 형식으로 날짜 포맷하기
     return (
         <div className='flex flex-col items-center h-screen'>
             <div className='flex pt-10'>

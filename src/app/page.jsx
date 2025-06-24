@@ -16,6 +16,7 @@ export default function Home() {
   const [whitegold, setWhitegold] = useState([]);
   const [silver, setSilver] = useState([]);
   const [playing, setPlaying] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const playerRef = useRef(null);
 
 
@@ -29,6 +30,7 @@ export default function Home() {
   };
 
   useEffect(() => {
+    setMounted(true);
     fetchData();
 
     const intervalId = setInterval(fetchData, 60000); // 1분마다 fetchData 함수를 실행합니다.
@@ -54,6 +56,16 @@ export default function Home() {
   const onPlayVideo = () => {
     setPlaying(true);
   };
+
+  // 서버 사이드 렌더링 중에는 로딩 상태를 보여줍니다
+  if (!mounted) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-2xl">로딩 중...</div>
+      </div>
+    );
+  }
+
   return (
     <>
       <div className="relative">
@@ -72,8 +84,8 @@ export default function Home() {
         url='https://www.youtube.com/watch?v=JVocS7Yftw8&list=PLVefncH6MagHe1l-uPB5jWUeDQokGUlyG'
         playing={playing}
         controls={true}
-        width="10%"
-        height="10%"
+        width="100%"
+        height="100%"
       />
       </>
   )
