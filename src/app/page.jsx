@@ -61,15 +61,15 @@ export default function Home() {
   if (!mounted) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <div className="text-2xl">로딩 중...</div>
+        <div className="text-lg sm:text-xl md:text-2xl">로딩 중...</div>
       </div>
     );
   }
 
   return (
     <>
-      <div className="relative">
-        <Slider {...settings} className="flex h-screen">
+      <div className="relative w-full">
+        <Slider {...settings} className="flex h-screen w-full">
             <Modal data={gold} />
             <Modal data={gold18k} />
             <Modal data={gold14k} />
@@ -77,16 +77,26 @@ export default function Home() {
             <Modal data={silver} />
         </Slider>
       </div>
-      <button onClick={onPlayVideo} className="flex text-6xl bg-slate-600 w-full">Play</button>
-      {playing ? 'Playing' : 'Not playing'}
-      <ReactPlayer
-        ref={playerRef}
-        url='https://www.youtube.com/watch?v=JVocS7Yftw8&list=PLVefncH6MagHe1l-uPB5jWUeDQokGUlyG'
-        playing={playing}
-        controls={true}
-        width="100%"
-        height="100%"
-      />
+      <button 
+        onClick={onPlayVideo} 
+        className="flex text-lg sm:text-2xl md:text-4xl lg:text-6xl bg-slate-600 w-full justify-center items-center py-2 sm:py-3 md:py-4 hover:bg-slate-700 transition-colors"
+      >
+        Play
+      </button>
+      <div className="text-center text-sm sm:text-base md:text-lg py-1">
+        {playing ? 'Playing' : 'Not playing'}
+      </div>
+      <div className="flex justify-center items-center w-full h-[50vh] sm:h-[60vh] md:h-[70vh] lg:h-[80vh] xl:h-[90vh]">
+        <ReactPlayer
+          ref={playerRef}
+          url='https://www.youtube.com/watch?v=JVocS7Yftw8&list=PLVefncH6MagHe1l-uPB5jWUeDQokGUlyG'
+          playing={playing}
+          controls={true}
+          width="100%"
+          height="100%"
+          style={{ maxWidth: '100%', maxHeight: '100%' }}
+        />
+      </div>
       </>
   )
 }
