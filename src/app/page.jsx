@@ -6,8 +6,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
 import Modal from "./Modal";
-import ReactPlayer from "react-player";
-
+import YouTube from "react-youtube";
 
 export default function Home() {
   const [gold, setGold] = useState([]);
@@ -17,8 +16,7 @@ export default function Home() {
   const [silver, setSilver] = useState([]);
   const [playing, setPlaying] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const playerRef = useRef(null);
-
+  const [player, setPlayer] = useState(null);
 
   const fetchData = async () => {
     const response = await axios.get('https://prod-image.koreagoldx.co.kr/price.json?{%22srchDt%22%20:%20%22TODAY%22,%22type%22%20:%20%22Au%22}');
@@ -33,10 +31,10 @@ export default function Home() {
     setMounted(true);
     fetchData();
 
-    const intervalId = setInterval(fetchData, 60000); // 1분마다 fetchData 함수를 실행합니다.
+    const intervalId = setInterval(fetchData, 60000);
 
     return () => {
-      clearInterval(intervalId)}; // 컴포넌트가 언마운트될 때 인터벌을 정리합니다.
+      clearInterval(intervalId)};
   }, []);
 
   const settings = {
@@ -54,10 +52,42 @@ export default function Home() {
   }
 
   const onPlayVideo = () => {
-    setPlaying(true);
+    if (player) {
+      player.playVideo();
+      setPlaying(true);
+    }
   };
 
-  // 서버 사이드 렌더링 중에는 로딩 상태를 보여줍니다
+  const onReady = (event) => {
+    setPlayer(event.target);
+  };
+
+  const onStateChange = (event) => {
+    if (event.data === 1) {
+      setPlaying(true);
+    } else {
+      setPlaying(false);
+    }
+  };
+
+  const opts = {
+    height: '100%',
+    width: '100%',
+    playerVars: {
+      autoplay: 0,
+      controls: 1,
+      rel: 0,
+      showinfo: 0,
+      modestbranding: 1,
+      iv_load_policy: 3,
+      fs: 1,
+      cc_load_policy: 0,
+      start: 6,
+      list: 'PLVefncH6MagHe1l-uPB5jWUeDQokGUlyG',
+      listType: 'playlist'
+    },
+  };
+
   if (!mounted) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -87,16 +117,14 @@ export default function Home() {
         {playing ? 'Playing' : 'Not playing'}
       </div>
       <div className="flex justify-center items-center w-full h-[50vh] sm:h-[60vh] md:h-[70vh] lg:h-[80vh] xl:h-[90vh]">
-        <ReactPlayer
-          ref={playerRef}
-          url='https://www.youtube.com/watch?v=JVocS7Yftw8&list=PLVefncH6MagHe1l-uPB5jWUeDQokGUlyG'
-          playing={playing}
-          controls={true}
-          width="100%"
-          height="100%"
-          style={{ maxWidth: '100%', maxHeight: '100%' }}
+        <YouTube
+          videoId="tHjCo2WDByI"
+          opts={opts}
+          onReady={onReady}
+          onStateChange={onStateChange}
+          className="w-full h-full"
         />
       </div>
-      </>
+    </>
   )
 }
