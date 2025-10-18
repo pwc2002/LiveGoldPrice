@@ -19,12 +19,27 @@ export default function Home() {
   const [player, setPlayer] = useState(null);
 
   const fetchData = async () => {
-    const response = await axios.get('https://prod-image.koreagoldx.co.kr/price.json?{%22srchDt%22%20:%20%22TODAY%22,%22type%22%20:%20%22Au%22}');
-    setGold(["순금(24K) 시세", response.data.lineUpVal[0].spure, response.data.lineUpVal[0].ppure, response.data.lineUpVal[0].turmPure, response.data.lineUpVal[0].pturmPure, response.data.lineUpVal[0].updownPure,response.data.lineUpVal[0].pupdownPure]);
-    setGold18k(["18K 금시세", 0, response.data.lineUpVal[0].p18k, response.data.lineUpVal[0].turm18k, response.data.lineUpVal[0].pturm18k, response.data.lineUpVal[0].updown18k, response.data.lineUpVal[0].pupdown18k]);
-    setGold14k(["14K 금시세", 0, response.data.lineUpVal[0].p14k, response.data.lineUpVal[0].turm14k, response.data.lineUpVal[0].pturm14k, response.data.lineUpVal[0].updown14k, response.data.lineUpVal[0].pupdown14k]);
-    setWhitegold(["백금시세", response.data.lineUpVal[0].swhite, response.data.lineUpVal[0].pwhite, response.data.lineUpVal[0].turmWhite, response.data.lineUpVal[0].pturmWhite, response.data.lineUpVal[0].updownWhite, response.data.lineUpVal[0].pupdownWhite]);
-    setSilver(["은시세", response.data.lineUpVal[0].ssilver, response.data.lineUpVal[0].psilver, response.data.lineUpVal[0].turmSilver, response.data.lineUpVal[0].pturmSilver, response.data.lineUpVal[0].updownSilver, response.data.lineUpVal[0].pupdownSilver]);
+    try {
+      const response = await axios.get('/api/gold-price');
+      const officialPrice = response.data.officialPrice4;
+      
+      // 순금(24K) 시세 - s_pure, p_pure, turm_s_pure, turm_p_pure, per_s_pure, per_p_pure
+      setGold(["순금(24K) 시세", officialPrice.s_pure, officialPrice.p_pure, officialPrice.turm_s_pure, officialPrice.turm_p_pure, officialPrice.per_s_pure, officialPrice.per_p_pure]);
+      
+      // 18K 금시세 - s_18k, p_18k, turm_s_18k, turm_p_18k, per_s_18k, per_p_18k
+      setGold18k(["18K 금시세", officialPrice.s_18k, officialPrice.p_18k, officialPrice.turm_s_18k, officialPrice.turm_p_18k, officialPrice.per_s_18k, officialPrice.per_p_18k]);
+      
+      // 14K 금시세 - s_14k, p_14k, turm_s_14k, turm_p_14k, per_s_14k, per_p_14k
+      setGold14k(["14K 금시세", officialPrice.s_14k, officialPrice.p_14k, officialPrice.turm_s_14k, officialPrice.turm_p_14k, officialPrice.per_s_14k, officialPrice.per_p_14k]);
+      
+      // 백금시세 - s_white, p_white, turm_s_white, turm_p_white, per_s_white, per_p_white
+      setWhitegold(["백금시세", officialPrice.s_white, officialPrice.p_white, officialPrice.turm_s_white, officialPrice.turm_p_white, officialPrice.per_s_white, officialPrice.per_p_white]);
+      
+      // 은시세 - s_silver, p_silver, turm_s_silver, turm_p_silver, per_s_silver, per_p_silver
+      setSilver(["은시세", officialPrice.s_silver, officialPrice.p_silver, officialPrice.turm_s_silver, officialPrice.turm_p_silver, officialPrice.per_s_silver, officialPrice.per_p_silver]);
+    } catch (error) {
+      console.error('데이터를 가져오는 중 오류가 발생했습니다:', error);
+    }
   };
 
   useEffect(() => {

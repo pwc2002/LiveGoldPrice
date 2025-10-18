@@ -21,7 +21,7 @@ function Modal({data}){
             </div>
             <div className='flex text-lg sm:text-2xl md:text-3xl lg:text-4xl xl:text-5xl pt-2 sm:pt-3 md:pt-4 pb-3 sm:pb-5 md:pb-7'>{formattedDate}</div>
             <div className='flex w-auto items-center justify-center'>
-                <p className='flex text-white pb-1 bg-[#FF5500] text-lg sm:text-2xl md:text-4xl lg:text-5xl xl:text-7xl font-black px-2 sm:px-3 md:px-4 lg:px-6'>{data[0]}</p>
+                <p className='flex text-white py-1 bg-[#FF5500] text-lg sm:text-2xl md:text-4xl lg:text-5xl xl:text-7xl font-black px-2 sm:px-3 md:px-4 lg:px-6'>{data[0]}</p>
             </div>
             <div className='flex flex-col justify-center items-center h-48 sm:h-64 md:h-80 lg:h-96 w-full'>
                 <div className='grid grid-cols-2 w-full place-items-stretch gap-2 sm:gap-4 md:gap-6'>
@@ -39,16 +39,16 @@ function Modal({data}){
                         <div className={`flex font-medium p-2 sm:p-3 md:p-4 lg:p-6 justify-center text-center ${data[1]==0 ? "text-sm sm:text-lg md:text-2xl lg:text-3xl xl:text-5xl" : "text-lg sm:text-2xl md:text-4xl lg:text-5xl xl:text-7xl"}`}>
                             {data[1]==0 ? "제품시세적용" : new Intl.NumberFormat('ko-KR', { style: 'decimal' }).format(data[1]) +"원"}
                         </div>
-                        <div className={`flex font-medium justify-center text-center text-xs sm:text-sm md:text-lg lg:text-2xl xl:text-4xl ${data[5] == "+" ? 'text-red-600' : data[5] == "-" ? 'text-blue-600' : 'text-gray-600'}`}> 
-                            ({data[5] == "+" ? "▲" : data[5] == '-' ? "▼" : ""}{new Intl.NumberFormat('ko-KR', { style: 'decimal' }).format(data[3])})
+                        <div className={`flex font-medium justify-center text-center text-xs sm:text-sm md:text-lg lg:text-2xl xl:text-4xl ${data[3] > 0 ? 'text-red-600' : data[3] < 0 ? 'text-blue-600' : 'text-gray-600'}`}> 
+                            ({data[3] > 0 ? "▲" : data[3] < 0 ? "▼" : ""}{new Intl.NumberFormat('ko-KR', { style: 'decimal' }).format(data[3])})
                         </div>
                     </div>
                     <div className="w-full">
                         <div className={`flex font-medium p-2 sm:p-3 md:p-4 lg:p-6 justify-center text-center ${data[2]==0 ? "text-sm sm:text-lg md:text-2xl lg:text-3xl xl:text-5xl" : "text-lg sm:text-2xl md:text-4xl lg:text-5xl xl:text-7xl"}`}>
                             {data[2]==0 ? "제품시세적용" : new Intl.NumberFormat('ko-KR', { style: 'decimal' }).format(data[2]) +"원"}
                         </div>
-                        <div className={`flex font-medium justify-center text-center text-xs sm:text-sm md:text-lg lg:text-2xl xl:text-4xl ${data[6] == "+" ? 'text-red-600' : data[6] == "-" ? 'text-blue-600' : 'text-gray-600'}`}> 
-                            ({data[6] == "+" ? "▲" : data[6] == '-' ? "▼" :  ""}{new Intl.NumberFormat('ko-KR', { style: 'decimal' }).format(data[4])})
+                        <div className={`flex font-medium justify-center text-center text-xs sm:text-sm md:text-lg lg:text-2xl xl:text-4xl ${data[4] > 0 ? 'text-red-600' : data[4] < 0 ? 'text-blue-600' : 'text-gray-600'}`}> 
+                            ({data[4] > 0 ? "▲" : data[4] < 0 ? "▼" :  ""}{new Intl.NumberFormat('ko-KR', { style: 'decimal' }).format(data[4])})
                         </div>
                     </div>
                 </div>
