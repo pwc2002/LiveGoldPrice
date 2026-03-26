@@ -15,6 +15,7 @@ export default function Home() {
   const [whitegold, setWhitegold] = useState([]);
   const [silver, setSilver] = useState([]);
   const [playing, setPlaying] = useState(false);
+  const [autoResume, setAutoResume] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [player, setPlayer] = useState(null);
 
@@ -22,19 +23,19 @@ export default function Home() {
     try {
       const response = await axios.get('/api/gold-price');
       const officialPrice = response.data.officialPrice4;
-      
+
       // 순금(24K) 시세 - s_pure, p_pure, turm_s_pure, turm_p_pure, per_s_pure, per_p_pure
       setGold(["순금(24K) 시세", officialPrice.s_pure, officialPrice.p_pure, officialPrice.turm_s_pure, officialPrice.turm_p_pure, officialPrice.per_s_pure, officialPrice.per_p_pure]);
-      
+
       // 18K 금시세 - s_18k, p_18k, turm_s_18k, turm_p_18k, per_s_18k, per_p_18k
       setGold18k(["18K 금시세", officialPrice.s_18k, officialPrice.p_18k, officialPrice.turm_s_18k, officialPrice.turm_p_18k, officialPrice.per_s_18k, officialPrice.per_p_18k]);
-      
+
       // 14K 금시세 - s_14k, p_14k, turm_s_14k, turm_p_14k, per_s_14k, per_p_14k
       setGold14k(["14K 금시세", officialPrice.s_14k, officialPrice.p_14k, officialPrice.turm_s_14k, officialPrice.turm_p_14k, officialPrice.per_s_14k, officialPrice.per_p_14k]);
-      
+
       // 백금시세 - s_white, p_white, turm_s_white, turm_p_white, per_s_white, per_p_white
       setWhitegold(["백금시세", officialPrice.s_white, officialPrice.p_white, officialPrice.turm_s_white, officialPrice.turm_p_white, officialPrice.per_s_white, officialPrice.per_p_white]);
-      
+
       // 은시세 - s_silver, p_silver, turm_s_silver, turm_p_silver, per_s_silver, per_p_silver
       setSilver(["은시세", officialPrice.s_silver, officialPrice.p_silver, officialPrice.turm_s_silver, officialPrice.turm_p_silver, officialPrice.per_s_silver, officialPrice.per_p_silver]);
     } catch (error) {
@@ -49,8 +50,29 @@ export default function Home() {
     const intervalId = setInterval(fetchData, 60000);
 
     return () => {
-      clearInterval(intervalId)};
+      clearInterval(intervalId)
+    };
   }, []);
+
+  // 유튜브 자동 일시정지(AFK 방지) 회피 로직
+  // 사용자가 'Play'를 눌러 playing이 true인 상태에서 영상이 일시정지(2) 상태로 넘어가면
+  // 즉시 다시 재생되도록 3초마다 체크합니다.
+  useEffect(() => {
+    let checkInterval;
+    if (autoResume && player) {
+      checkInterval = setInterval(() => {
+        if (player.getPlayerState && player.getPlayerState() === 2) {
+          console.log("Auto-resuming YouTube playback to bypass AFK pause...");
+          player.playVideo();
+        }
+      }, 3000);
+    }
+    return () => {
+      if (checkInterval) {
+        clearInterval(checkInterval);
+      }
+    };
+  }, [autoResume, player]);
 
   const settings = {
     dots: false,
@@ -70,6 +92,7 @@ export default function Home() {
     if (player) {
       player.playVideo();
       setPlaying(true);
+      setAutoResume(true);
     }
   };
 
@@ -115,15 +138,15 @@ export default function Home() {
     <>
       <div className="relative w-full">
         <Slider {...settings} className="flex h-screen w-full">
-            <Modal data={gold} />
-            <Modal data={gold18k} />
-            <Modal data={gold14k} />
-            <Modal data={whitegold} />
-            <Modal data={silver} />
+          <Modal data={gold} />
+          <Modal data={gold18k} />
+          <Modal data={gold14k} />
+          <Modal data={whitegold} />
+          <Modal data={silver} />
         </Slider>
       </div>
-      <button 
-        onClick={onPlayVideo} 
+      <button
+        onClick={onPlayVideo}
         className="flex text-lg sm:text-2xl md:text-4xl lg:text-6xl bg-slate-600 w-full justify-center items-center py-2 sm:py-3 md:py-4 hover:bg-slate-700 transition-colors"
       >
         Play
