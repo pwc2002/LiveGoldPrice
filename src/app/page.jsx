@@ -18,6 +18,9 @@ export default function Home() {
   const [autoResume, setAutoResume] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [player, setPlayer] = useState(null);
+  const [muted, setMuted] = useState(true);
+  const [youtubeKey, setYoutubeKey] = useState(0);
+  const lastBufferingTime = useRef(null);
 
   const fetchData = async () => {
     try {
@@ -54,24 +57,61 @@ export default function Home() {
     };
   }, []);
 
-  // 유튜브 자동 일시정지(AFK 방지) 회피 로직
-  // 사용자가 'Play'를 눌러 playing이 true인 상태에서 영상이 일시정지(2) 상태로 넘어가면
-  // 즉시 다시 재생되도록 3초마다 체크합니다.
+  // 유튜브 자동 복구 로직
+  // - 일시정지(2) 상태 → 자동 재생 재개 (AFK 방지)
+  // - 버퍼링(3) 30초 이상 지속 → 플레이어 재생성
+  // - 종료(-1, 0, 5) 상태 → 자동 재생 재개
   useEffect(() => {
     let checkInterval;
     if (autoResume && player) {
       checkInterval = setInterval(() => {
-        if (player.getPlayerState && player.getPlayerState() === 2) {
-          console.log("Auto-resuming YouTube playback to bypass AFK pause...");
-          player.playVideo();
+        try {
+          if (!player.getPlayerState) return;
+          const state = player.getPlayerState();
+
+          // 일시정지(2) 또는 종료/미시작(-1, 0, 5) → 재생
+          if (state === 2 || state === -1 || state === 0 || state === 5) {
+            console.log(`Auto-resuming from state ${state}...`);
+            player.playVideo();
+            lastBufferingTime.current = null;
+          }
+          // 버퍼링(3) 30초 이상 지속 → 플레이어 재생성
+          else if (state === 3) {
+            if (!lastBufferingTime.current) {
+              lastBufferingTime.current = Date.now();
+            } else if (Date.now() - lastBufferingTime.current > 30000) {
+              console.log("Buffering stuck for 30s, recreating player...");
+              lastBufferingTime.current = null;
+              setYoutubeKey(prev => prev + 1);
+            }
+          } else {
+            lastBufferingTime.current = null;
+          }
+        } catch (e) {
+          console.error("Player check error, recreating...", e);
+          setYoutubeKey(prev => prev + 1);
         }
       }, 3000);
     }
     return () => {
-      if (checkInterval) {
-        clearInterval(checkInterval);
+      if (checkInterval) clearInterval(checkInterval);
+    };
+  }, [autoResume, player]);
+
+  // 페이지 visibility 변경 시 재생 복구 (TV 브라우저 절전 복귀 대응)
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (!document.hidden && autoResume && player) {
+        try {
+          console.log("Page visible again, resuming playback...");
+          player.playVideo();
+        } catch (e) {
+          setYoutubeKey(prev => prev + 1);
+        }
       }
     };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, [autoResume, player]);
 
   const settings = {
@@ -90,6 +130,9 @@ export default function Home() {
 
   const onPlayVideo = () => {
     if (player) {
+      player.unMute();
+      player.setVolume(100);
+      setMuted(false);
       player.playVideo();
       setPlaying(true);
       setAutoResume(true);
@@ -97,7 +140,19 @@ export default function Home() {
   };
 
   const onReady = (event) => {
-    setPlayer(event.target);
+    const p = event.target;
+    setPlayer(p);
+    // 음소거 자동재생 시작 (브라우저 정책 우회)
+    p.mute();
+    p.playVideo();
+    // autoResume이 이미 활성화된 상태(플레이어 재생성)라면 음소거 해제
+    if (autoResume) {
+      setTimeout(() => {
+        p.unMute();
+        p.setVolume(100);
+        setMuted(false);
+      }, 500);
+    }
   };
 
   const onStateChange = (event) => {
@@ -108,11 +163,18 @@ export default function Home() {
     }
   };
 
+  const onError = (event) => {
+    console.error("YouTube player error:", event.data);
+    // 에러 발생 시 플레이어 재생성
+    setTimeout(() => setYoutubeKey(prev => prev + 1), 2000);
+  };
+
   const opts = {
     height: '100%',
     width: '100%',
     playerVars: {
-      autoplay: 0,
+      autoplay: 1,
+      mute: 1,
       controls: 1,
       rel: 0,
       showinfo: 0,
@@ -149,17 +211,19 @@ export default function Home() {
         onClick={onPlayVideo}
         className="flex text-lg sm:text-2xl md:text-4xl lg:text-6xl bg-slate-600 w-full justify-center items-center py-2 sm:py-3 md:py-4 hover:bg-slate-700 transition-colors"
       >
-        Play
+        {muted ? '🔇 소리 켜기' : (playing ? '▶ Playing' : '▶ Play')}
       </button>
       <div className="text-center text-sm sm:text-base md:text-lg py-1">
-        {playing ? 'Playing' : 'Not playing'}
+        {playing ? (muted ? '🔇 음소거 재생 중' : '🔊 재생 중') : '⏸ 정지'}
       </div>
       <div className="flex justify-center items-center w-full h-[50vh] sm:h-[60vh] md:h-[70vh] lg:h-[80vh] xl:h-[90vh]">
         <YouTube
+          key={youtubeKey}
           videoId="tHjCo2WDByI"
           opts={opts}
           onReady={onReady}
           onStateChange={onStateChange}
+          onError={onError}
           className="w-full h-full"
         />
       </div>
