@@ -19,19 +19,28 @@ export default function Home() {
   const [player, setPlayer] = useState(null);
   const [playerKey, setPlayerKey] = useState(0); // 값이 바뀌면 YouTube 플레이어를 새로 생성(remount)
   const [logs, setLogs] = useState([]);          // 화면에 표시할 진단 로그(최신순)
+  const [heartbeat, setHeartbeat] = useState(null); // 마지막으로 '정상 재생'을 확인한 시각/위치
 
   const playerRef = useRef(null);      // 최신 플레이어 인스턴스(이벤트 리스너에서 접근용)
+  const logsRef = useRef([]);          // 로그 원본(최신순) — localStorage 저장의 단일 소스
   const resumeTimeRef = useRef(0);     // remount 후 이어서 재생할 위치(초)
   const lastTimeRef = useRef(0);       // 직전 점검 시 재생 위치 — '실제로 흐르는가' 판단용
   const stallTicksRef = useRef(0);     // 연속으로 멈춰있던 점검 횟수
   const hasStartedRef = useRef(false); // 한 번이라도 재생을 시작했는지(최초 재생 전엔 감시 안 함)
   const lastRemountAtRef = useRef(0);  // 마지막 remount 시각(ms) — remount 폭주 방지
   const remountCountRef = useRef(0);   // remount 누적 횟수(로그용)
+  const lastHbAtRef = useRef(0);       // 마지막 심장박동 갱신 시각(ms) — 재렌더 줄이려 ~10초 간격
 
-  // 화면 우측에 박히는 로그. TV에서 콘솔을 못 보니 멈춤 원인을 눈으로 확인하기 위함.
+  const LOG_KEY = 'goldway_logs';
+  const HEALTHY_KEY = 'goldway_lastHealthy';
+
+  // 화면에 박히는 로그. localStorage에도 저장해 리로드/크래시 후에도 직전 기록이 남도록 한다.
   const addLog = (msg) => {
     const t = new Date().toTimeString().slice(0, 8); // HH:MM:SS
-    setLogs((prev) => [`${t}  ${msg}`, ...prev].slice(0, 20));
+    const next = [`${t}  ${msg}`, ...logsRef.current].slice(0, 40);
+    logsRef.current = next;
+    setLogs(next);
+    try { localStorage.setItem(LOG_KEY, JSON.stringify(next)); } catch (e) {}
   };
 
   // 어떤 이유로든 멈췄을 때 가장 먼저 시도하는 가벼운 복구: 현재 플레이어에 재생 명령.
@@ -41,7 +50,7 @@ export default function Home() {
     try {
       p.playVideo();
       if (reason) addLog(`▶ 재개 시도(${reason})`);
-    } catch (e) {}
+    } catch (e) { addLog(`✗ playVideo 예외: ${e && e.message}`); }
   };
 
   // 플레이어를 통째로 재생성(remount)하되 직전 위치부터 이어서 재생. 폭주 방지 위해 최소 15초 간격.
@@ -58,6 +67,36 @@ export default function Home() {
     addLog(`⟳ remount #${remountCountRef.current} → ${Math.floor(resumeTimeRef.current)}s 이어재생`);
     setPlayerKey((k) => k + 1);
   };
+
+  // === 진단 로그 복원 + 전역 에러 캐치 ===
+  // 리로드/크래시 후 직전 로그를 불러오고, 예상 못한 JS 오류/Promise 거부까지 화면 로그에 남긴다.
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(LOG_KEY);
+      if (saved) {
+        const arr = JSON.parse(saved);
+        if (Array.isArray(arr)) { logsRef.current = arr; setLogs(arr); }
+      }
+      const lastHealthy = localStorage.getItem(HEALTHY_KEY);
+      if (lastHealthy) addLog(`이전 세션 마지막 정상: ${lastHealthy}`);
+    } catch (e) {}
+    addLog('— 페이지 로드 —'); // 리로드 경계 표시(여기서 끊겨 있으면 직전에 리로드/크래시된 것)
+
+    const onErr = (e) => {
+      const where = e.filename ? ` @${(e.filename + '').split('/').pop()}:${e.lineno}` : '';
+      addLog(`✗ JS오류: ${e.message || (e.error && e.error.message) || '알 수 없음'}${where}`);
+    };
+    const onRej = (e) => {
+      const r = e.reason;
+      addLog(`✗ Promise거부: ${(r && r.message) || r || '알 수 없음'}`);
+    };
+    window.addEventListener('error', onErr);
+    window.addEventListener('unhandledrejection', onRej);
+    return () => {
+      window.removeEventListener('error', onErr);
+      window.removeEventListener('unhandledrejection', onRej);
+    };
+  }, []);
 
   const fetchData = async () => {
     try {
@@ -124,6 +163,15 @@ export default function Home() {
       if (state === 1 && advanced) {
         if (stallTicksRef.current > 0) addLog('✓ 재생 복구됨');
         stallTicksRef.current = 0;
+        // 심장박동: '여기까지 코드가 살아서 정상 재생 중'을 시각·위치로 갱신(~10초 간격).
+        // 화면이 이 시각에 멈춰 있으면 = OS가 페이지/타이머를 얼린 것으로 확정 가능.
+        const now2 = Date.now();
+        if (now2 - lastHbAtRef.current >= 10000) {
+          lastHbAtRef.current = now2;
+          const hb = `${new Date().toTimeString().slice(0, 8)} · ${Math.floor(t)}s`;
+          setHeartbeat(hb);
+          try { localStorage.setItem(HEALTHY_KEY, hb); } catch (e) {}
+        }
         return;
       }
 
@@ -136,7 +184,7 @@ export default function Home() {
         addLog(`⚠ 멈춤 감지(상태 ${state}${advanced ? '' : ', 위치정지'}) → 재개`);
         forcePlay();
       } else if (ticks === 2 && !isBuffering) {
-        try { p.seekTo((t || 0) + 0.5, true); } catch (e) {} // 살짝 앞으로 seek해 락 해제
+        try { p.seekTo((t || 0) + 0.5, true); } catch (e) { addLog(`✗ seek 예외: ${e && e.message}`); } // 살짝 앞으로 seek해 락 해제
         forcePlay('seek로 락 해제');
       } else if ((!isBuffering && ticks >= 3) || (isBuffering && ticks >= 8)) {
         // 일반 정지 ~9초 / 버퍼링 스톨 ~24초 넘기면 → 위치 보존 remount
@@ -237,8 +285,9 @@ export default function Home() {
       setPlaying(true);
     } else {
       setPlaying(false);
-      // 일시정지·종료면 워치독보다 빠르게 즉시 1차 재개
-      if (state === 2 || state === 0) {
+      // 일시정지·종료면 워치독보다 빠르게 즉시 1차 재개.
+      // 단 '최초 재생을 시작한 뒤'에만 — 시작 전엔 자동재생 차단과 싸우는 헛루프를 막는다.
+      if (hasStartedRef.current && (state === 2 || state === 0)) {
         try { event.target.playVideo(); } catch (e) {}
       }
     }
@@ -296,8 +345,9 @@ export default function Home() {
         Play
       </button>
       <div className="flex items-stretch gap-2 px-2 py-1">
-        <div className="shrink-0 self-center w-28 text-center text-sm sm:text-base md:text-lg font-bold">
-          {playing ? 'Playing' : 'Not playing'}
+        <div className="shrink-0 self-center w-36 text-center">
+          <div className="text-sm sm:text-base md:text-lg font-bold">{playing ? 'Playing' : 'Not playing'}</div>
+          <div className="font-mono text-[10px] text-gray-500">♥ {heartbeat || '—'}</div>
         </div>
         <div className="flex-1 max-h-40 overflow-auto rounded bg-gray-900 px-2 py-1 font-mono text-[10px] sm:text-xs leading-tight text-green-300">
           {logs.length === 0
