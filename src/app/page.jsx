@@ -15,30 +15,67 @@ export default function Home() {
   const [whitegold, setWhitegold] = useState([]);
   const [silver, setSilver] = useState([]);
   const [playing, setPlaying] = useState(false);
-  const [autoResume, setAutoResume] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [player, setPlayer] = useState(null);
-  const [muted, setMuted] = useState(true);
-  const [youtubeKey, setYoutubeKey] = useState(0);
-  const lastBufferingTime = useRef(null);
+  const [playerKey, setPlayerKey] = useState(0); // 값이 바뀌면 YouTube 플레이어를 새로 생성(remount)
+  const [logs, setLogs] = useState([]);          // 화면에 표시할 진단 로그(최신순)
+
+  const playerRef = useRef(null);      // 최신 플레이어 인스턴스(이벤트 리스너에서 접근용)
+  const resumeTimeRef = useRef(0);     // remount 후 이어서 재생할 위치(초)
+  const lastTimeRef = useRef(0);       // 직전 점검 시 재생 위치 — '실제로 흐르는가' 판단용
+  const stallTicksRef = useRef(0);     // 연속으로 멈춰있던 점검 횟수
+  const hasStartedRef = useRef(false); // 한 번이라도 재생을 시작했는지(최초 재생 전엔 감시 안 함)
+  const lastRemountAtRef = useRef(0);  // 마지막 remount 시각(ms) — remount 폭주 방지
+  const remountCountRef = useRef(0);   // remount 누적 횟수(로그용)
+
+  // 화면 우측에 박히는 로그. TV에서 콘솔을 못 보니 멈춤 원인을 눈으로 확인하기 위함.
+  const addLog = (msg) => {
+    const t = new Date().toTimeString().slice(0, 8); // HH:MM:SS
+    setLogs((prev) => [`${t}  ${msg}`, ...prev].slice(0, 20));
+  };
+
+  // 어떤 이유로든 멈췄을 때 가장 먼저 시도하는 가벼운 복구: 현재 플레이어에 재생 명령.
+  const forcePlay = (reason) => {
+    const p = playerRef.current;
+    if (!p) return;
+    try {
+      p.playVideo();
+      if (reason) addLog(`▶ 재개 시도(${reason})`);
+    } catch (e) {}
+  };
+
+  // 플레이어를 통째로 재생성(remount)하되 직전 위치부터 이어서 재생. 폭주 방지 위해 최소 15초 간격.
+  const safeRemount = (atTime) => {
+    const now = Date.now();
+    if (now - lastRemountAtRef.current < 15000) {
+      forcePlay('remount 대기중');
+      return;
+    }
+    lastRemountAtRef.current = now;
+    if (atTime > 0) resumeTimeRef.current = atTime;
+    stallTicksRef.current = 0;
+    remountCountRef.current += 1;
+    addLog(`⟳ remount #${remountCountRef.current} → ${Math.floor(resumeTimeRef.current)}s 이어재생`);
+    setPlayerKey((k) => k + 1);
+  };
 
   const fetchData = async () => {
     try {
       const response = await axios.get('/api/gold-price');
       const officialPrice = response.data.officialPrice4;
-
+      
       // 순금(24K) 시세 - s_pure, p_pure, turm_s_pure, turm_p_pure, per_s_pure, per_p_pure
       setGold(["순금(24K) 시세", officialPrice.s_pure, officialPrice.p_pure, officialPrice.turm_s_pure, officialPrice.turm_p_pure, officialPrice.per_s_pure, officialPrice.per_p_pure]);
-
+      
       // 18K 금시세 - s_18k, p_18k, turm_s_18k, turm_p_18k, per_s_18k, per_p_18k
       setGold18k(["18K 금시세", officialPrice.s_18k, officialPrice.p_18k, officialPrice.turm_s_18k, officialPrice.turm_p_18k, officialPrice.per_s_18k, officialPrice.per_p_18k]);
-
+      
       // 14K 금시세 - s_14k, p_14k, turm_s_14k, turm_p_14k, per_s_14k, per_p_14k
       setGold14k(["14K 금시세", officialPrice.s_14k, officialPrice.p_14k, officialPrice.turm_s_14k, officialPrice.turm_p_14k, officialPrice.per_s_14k, officialPrice.per_p_14k]);
-
+      
       // 백금시세 - s_white, p_white, turm_s_white, turm_p_white, per_s_white, per_p_white
       setWhitegold(["백금시세", officialPrice.s_white, officialPrice.p_white, officialPrice.turm_s_white, officialPrice.turm_p_white, officialPrice.per_s_white, officialPrice.per_p_white]);
-
+      
       // 은시세 - s_silver, p_silver, turm_s_silver, turm_p_silver, per_s_silver, per_p_silver
       setSilver(["은시세", officialPrice.s_silver, officialPrice.p_silver, officialPrice.turm_s_silver, officialPrice.turm_p_silver, officialPrice.per_s_silver, officialPrice.per_p_silver]);
     } catch (error) {
@@ -53,66 +90,100 @@ export default function Home() {
     const intervalId = setInterval(fetchData, 60000);
 
     return () => {
-      clearInterval(intervalId)
+      clearInterval(intervalId)};
+  }, []);
+
+  // === 핵심 워치독: '상태값'이 아니라 '재생 위치가 실제로 흐르는가'로 건강을 판단 ===
+  // → 좀비 재생(상태는 1인데 시간 정지), 버퍼링 영구정지, 일시정지, 종료를 한 곳에서 모두 잡는다.
+  useEffect(() => {
+    if (!player) return;
+    const id = setInterval(() => {
+      const p = playerRef.current;
+      if (!p) return;
+      let state, t;
+      try {
+        state = p.getPlayerState();
+        t = p.getCurrentTime();
+      } catch (e) {
+        // 플레이어 객체 자체가 깨짐(메모리 회수 등) → 재생성
+        addLog('⚠ 플레이어 접근 불가 → remount');
+        safeRemount(resumeTimeRef.current);
+        return;
+      }
+
+      // 최초 재생 전에는 감시하지 않음(Play를 누르거나 자동재생이 걸리기 전)
+      if (!hasStartedRef.current) {
+        if (state === 1) hasStartedRef.current = true;
+        lastTimeRef.current = t;
+        return;
+      }
+
+      const advanced = t > lastTimeRef.current + 0.25; // 위치가 실제로 흐르는가
+      lastTimeRef.current = t;
+
+      if (state === 1 && advanced) {
+        if (stallTicksRef.current > 0) addLog('✓ 재생 복구됨');
+        stallTicksRef.current = 0;
+        return;
+      }
+
+      // 여기 도달 = 멈춤(일시정지 / 종료 / 버퍼링 스톨 / 좀비재생 중 하나)
+      stallTicksRef.current += 1;
+      const ticks = stallTicksRef.current;
+      const isBuffering = state === 3; // 버퍼링은 일시적일 수 있으니 더 너그럽게
+
+      if (ticks === 1) {
+        addLog(`⚠ 멈춤 감지(상태 ${state}${advanced ? '' : ', 위치정지'}) → 재개`);
+        forcePlay();
+      } else if (ticks === 2 && !isBuffering) {
+        try { p.seekTo((t || 0) + 0.5, true); } catch (e) {} // 살짝 앞으로 seek해 락 해제
+        forcePlay('seek로 락 해제');
+      } else if ((!isBuffering && ticks >= 3) || (isBuffering && ticks >= 8)) {
+        // 일반 정지 ~9초 / 버퍼링 스톨 ~24초 넘기면 → 위치 보존 remount
+        safeRemount(t);
+      } else {
+        forcePlay();
+      }
+    }, 3000);
+    return () => clearInterval(id);
+  }, [player]);
+
+  // === 환경 이벤트 기반 복구: 화면 복귀 / 네트워크 복구 / bfcache 복원 / 앱 resume ===
+  useEffect(() => {
+    const resume = (why) => {
+      if (!hasStartedRef.current) return;
+      stallTicksRef.current = 0;
+      addLog(`↻ ${why} → 재개 확인`);
+      forcePlay(why);
+    };
+    const onVis = () => { if (document.visibilityState === 'visible') resume('화면 복귀'); };
+    const onOnline = () => resume('네트워크 복구');
+    const onPageShow = (e) => { if (e && e.persisted) resume('bfcache 복원'); };
+    const onAppResume = () => resume('앱 resume'); // Page Lifecycle / 일부 WebView
+
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('online', onOnline);
+    window.addEventListener('pageshow', onPageShow);
+    document.addEventListener('resume', onAppResume);
+    return () => {
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('pageshow', onPageShow);
+      document.removeEventListener('resume', onAppResume);
     };
   }, []);
 
-  // 유튜브 자동 복구 로직
-  // - 일시정지(2) 상태 → 자동 재생 재개 (AFK 방지)
-  // - 버퍼링(3) 30초 이상 지속 → 플레이어 재생성
-  // - 종료(-1, 0, 5) 상태 → 자동 재생 재개
+  // === 메모리 누적 대비: 3시간마다 위치를 보존한 채 플레이어를 새로 만든다 ===
   useEffect(() => {
-    let checkInterval;
-    if (autoResume && player) {
-      checkInterval = setInterval(() => {
-        try {
-          if (!player.getPlayerState) return;
-          const state = player.getPlayerState();
-
-          // 일시정지(2) 또는 종료/미시작(-1, 0, 5) → 재생
-          if (state === 2 || state === -1 || state === 0 || state === 5) {
-            console.log(`Auto-resuming from state ${state}...`);
-            player.playVideo();
-            lastBufferingTime.current = null;
-          }
-          // 버퍼링(3) 30초 이상 지속 → 플레이어 재생성
-          else if (state === 3) {
-            if (!lastBufferingTime.current) {
-              lastBufferingTime.current = Date.now();
-            } else if (Date.now() - lastBufferingTime.current > 30000) {
-              console.log("Buffering stuck for 30s, recreating player...");
-              lastBufferingTime.current = null;
-              setYoutubeKey(prev => prev + 1);
-            }
-          } else {
-            lastBufferingTime.current = null;
-          }
-        } catch (e) {
-          console.error("Player check error, recreating...", e);
-          setYoutubeKey(prev => prev + 1);
-        }
-      }, 3000);
-    }
-    return () => {
-      if (checkInterval) clearInterval(checkInterval);
-    };
-  }, [autoResume, player]);
-
-  // 페이지 visibility 변경 시 재생 복구 (TV 브라우저 절전 복귀 대응)
-  useEffect(() => {
-    const handleVisibility = () => {
-      if (!document.hidden && autoResume && player) {
-        try {
-          console.log("Page visible again, resuming playback...");
-          player.playVideo();
-        } catch (e) {
-          setYoutubeKey(prev => prev + 1);
-        }
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibility);
-    return () => document.removeEventListener('visibilitychange', handleVisibility);
-  }, [autoResume, player]);
+    const id = setInterval(() => {
+      if (!hasStartedRef.current) return;
+      let t = resumeTimeRef.current;
+      try { t = playerRef.current ? playerRef.current.getCurrentTime() : t; } catch (e) {}
+      addLog('⟳ 정기 새로고침(메모리 정리)');
+      safeRemount(t);
+    }, 3 * 60 * 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
 
   const settings = {
     dots: false,
@@ -129,52 +200,63 @@ export default function Home() {
   }
 
   const onPlayVideo = () => {
-    if (player) {
-      player.unMute();
-      player.setVolume(100);
-      setMuted(false);
-      player.playVideo();
+    const p = playerRef.current || player;
+    if (p) {
+      try { p.playVideo(); } catch (e) {}
+      hasStartedRef.current = true;
+      stallTicksRef.current = 0;
       setPlaying(true);
-      setAutoResume(true);
     }
   };
 
   const onReady = (event) => {
-    const p = event.target;
-    setPlayer(p);
-    // 음소거 자동재생 시작 (브라우저 정책 우회)
-    p.mute();
-    p.playVideo();
-    // autoResume이 이미 활성화된 상태(플레이어 재생성)라면 음소거 해제
-    if (autoResume) {
-      setTimeout(() => {
-        p.unMute();
-        p.setVolume(100);
-        setMuted(false);
-      }, 500);
+    playerRef.current = event.target;
+    setPlayer(event.target);
+    if (resumeTimeRef.current > 0) {
+      // remount된 경우: 저장해둔 위치부터 이어서 자동 재생
+      try {
+        event.target.seekTo(resumeTimeRef.current, true);
+        event.target.playVideo();
+      } catch (e) {}
+      lastTimeRef.current = resumeTimeRef.current;
+      addLog(`✓ remount 완료 — ${Math.floor(resumeTimeRef.current)}s 이어재생`);
+    } else {
+      // 최초 로드: 자동재생 시도(TV 브라우저는 대개 허용). 막히면 Play 버튼으로 시작.
+      try { event.target.playVideo(); } catch (e) {}
+      addLog('✓ 플레이어 준비됨 — 자동재생 시도(막히면 Play 버튼)');
     }
   };
 
   const onStateChange = (event) => {
-    if (event.data === 1) {
+    // YT 상태값: -1 시작전, 0 종료, 1 재생, 2 일시정지, 3 버퍼링, 5 대기
+    const state = event.data;
+    const names = { '-1': '시작전', 0: '종료', 1: '재생', 2: '일시정지', 3: '버퍼링', 5: '대기' };
+    addLog(`상태: ${names[state] ?? state}(${state})`);
+    if (state === 1) {
+      hasStartedRef.current = true;
       setPlaying(true);
     } else {
       setPlaying(false);
+      // 일시정지·종료면 워치독보다 빠르게 즉시 1차 재개
+      if (state === 2 || state === 0) {
+        try { event.target.playVideo(); } catch (e) {}
+      }
     }
   };
 
+  // 플레이어 에러(2 잘못된 ID, 5 HTML5 오류, 100 삭제/비공개, 101·150 임베드 불가) → remount
   const onError = (event) => {
-    console.error("YouTube player error:", event.data);
-    // 에러 발생 시 플레이어 재생성
-    setTimeout(() => setYoutubeKey(prev => prev + 1), 2000);
+    let t = resumeTimeRef.current;
+    try { t = playerRef.current ? playerRef.current.getCurrentTime() : t; } catch (e) {}
+    addLog(`✗ 에러(${event && event.data}) → remount`);
+    safeRemount(t);
   };
 
   const opts = {
     height: '100%',
     width: '100%',
     playerVars: {
-      autoplay: 1,
-      mute: 1,
+      autoplay: 0,
       controls: 1,
       rel: 0,
       showinfo: 0,
@@ -200,25 +282,32 @@ export default function Home() {
     <>
       <div className="relative w-full">
         <Slider {...settings} className="flex h-screen w-full">
-          <Modal data={gold} />
-          <Modal data={gold18k} />
-          <Modal data={gold14k} />
-          <Modal data={whitegold} />
-          <Modal data={silver} />
+            <Modal data={gold} />
+            <Modal data={gold18k} />
+            <Modal data={gold14k} />
+            <Modal data={whitegold} />
+            <Modal data={silver} />
         </Slider>
       </div>
-      <button
-        onClick={onPlayVideo}
+      <button 
+        onClick={onPlayVideo} 
         className="flex text-lg sm:text-2xl md:text-4xl lg:text-6xl bg-slate-600 w-full justify-center items-center py-2 sm:py-3 md:py-4 hover:bg-slate-700 transition-colors"
       >
-        {muted ? '🔇 소리 켜기' : (playing ? '▶ Playing' : '▶ Play')}
+        Play
       </button>
-      <div className="text-center text-sm sm:text-base md:text-lg py-1">
-        {playing ? (muted ? '🔇 음소거 재생 중' : '🔊 재생 중') : '⏸ 정지'}
+      <div className="flex items-stretch gap-2 px-2 py-1">
+        <div className="shrink-0 self-center w-28 text-center text-sm sm:text-base md:text-lg font-bold">
+          {playing ? 'Playing' : 'Not playing'}
+        </div>
+        <div className="flex-1 max-h-40 overflow-auto rounded bg-gray-900 px-2 py-1 font-mono text-[10px] sm:text-xs leading-tight text-green-300">
+          {logs.length === 0
+            ? <div className="text-gray-500">로그 없음</div>
+            : logs.map((line, i) => <div key={i}>{line}</div>)}
+        </div>
       </div>
       <div className="flex justify-center items-center w-full h-[50vh] sm:h-[60vh] md:h-[70vh] lg:h-[80vh] xl:h-[90vh]">
         <YouTube
-          key={youtubeKey}
+          key={playerKey}
           videoId="tHjCo2WDByI"
           opts={opts}
           onReady={onReady}
