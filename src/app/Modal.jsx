@@ -37,19 +37,23 @@ function Modal({data}){
                 <div className='grid grid-cols-2 w-full justify-items-center gap-2 sm:gap-4 md:gap-6'>
                     <div className="w-full">
                         <div className={`flex font-medium p-2 sm:p-3 md:p-4 lg:p-6 justify-center text-center ${data[1]==0 ? "text-sm sm:text-lg md:text-2xl lg:text-3xl xl:text-5xl" : "text-lg sm:text-2xl md:text-4xl lg:text-5xl xl:text-7xl"}`}>
-                            {data[1]==0 ? "제품시세적용" : new Intl.NumberFormat('ko-KR', { style: 'decimal' }).format(data[1]) +"원"}
+                            {data[1]==0 ? "제품 시세 적용" : new Intl.NumberFormat('ko-KR', { style: 'decimal' }).format(data[1]) +"원"}
                         </div>
-                        <div className={`flex font-medium justify-center text-center text-xs sm:text-sm md:text-lg lg:text-2xl xl:text-4xl ${data[3] > 0 ? 'text-red-600' : data[3] < 0 ? 'text-blue-600' : 'text-gray-600'}`}> 
-                            ({data[3] > 0 ? "▲" : data[3] < 0 ? "▼" : ""}{new Intl.NumberFormat('ko-KR', { style: 'decimal' }).format(data[3])})
-                        </div>
+                        {data[1] != 0 && (
+                            <div className={`flex font-medium justify-center text-center text-xs sm:text-sm md:text-lg lg:text-2xl xl:text-4xl ${data[3] > 0 ? 'text-red-600' : data[3] < 0 ? 'text-blue-600' : 'text-gray-600'}`}>
+                                ({data[3] > 0 ? "▲" : data[3] < 0 ? "▼" : ""}{new Intl.NumberFormat('ko-KR', { style: 'decimal' }).format(data[3])})
+                            </div>
+                        )}
                     </div>
                     <div className="w-full">
                         <div className={`flex font-medium p-2 sm:p-3 md:p-4 lg:p-6 justify-center text-center ${data[2]==0 ? "text-sm sm:text-lg md:text-2xl lg:text-3xl xl:text-5xl" : "text-lg sm:text-2xl md:text-4xl lg:text-5xl xl:text-7xl"}`}>
-                            {data[2]==0 ? "제품시세적용" : new Intl.NumberFormat('ko-KR', { style: 'decimal' }).format(data[2]) +"원"}
+                            {data[2]==0 ? "제품 시세 적용" : new Intl.NumberFormat('ko-KR', { style: 'decimal' }).format(data[2]) +"원"}
                         </div>
-                        <div className={`flex font-medium justify-center text-center text-xs sm:text-sm md:text-lg lg:text-2xl xl:text-4xl ${data[4] > 0 ? 'text-red-600' : data[4] < 0 ? 'text-blue-600' : 'text-gray-600'}`}> 
-                            ({data[4] > 0 ? "▲" : data[4] < 0 ? "▼" :  ""}{new Intl.NumberFormat('ko-KR', { style: 'decimal' }).format(data[4])})
-                        </div>
+                        {data[2] != 0 && (
+                            <div className={`flex font-medium justify-center text-center text-xs sm:text-sm md:text-lg lg:text-2xl xl:text-4xl ${data[4] > 0 ? 'text-red-600' : data[4] < 0 ? 'text-blue-600' : 'text-gray-600'}`}>
+                                ({data[4] > 0 ? "▲" : data[4] < 0 ? "▼" :  ""}{new Intl.NumberFormat('ko-KR', { style: 'decimal' }).format(data[4])})
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
