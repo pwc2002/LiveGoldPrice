@@ -1,4 +1,15 @@
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* TV 시인성: 루트 크기를 키워 rem 기반 Tailwind 크기 전체를 비례 확대 */
+html {
+  font-size: 18px;
+}
+
+body {
+  font-family: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
+  font-variant-numeric: tabular-nums; /* 숫자 폭 고정 — 시세 갱신·슬라이드 전환 시 흔들림 방지 */
+}

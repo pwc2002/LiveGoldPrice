@@ -16,14 +16,14 @@ function Modal({data}){
 
     return (
         <div className='flex flex-col items-center h-screen w-full px-2 sm:px-4 md:px-6 lg:px-8'>
-            <div className='flex pt-4 sm:pt-6 md:pt-8 lg:pt-10'>
-                <img src='/app/그림4.png' className='h-20 sm:h-24 md:h-32 lg:h-40 w-auto'/>
+            <div className='flex pt-3 sm:pt-4 md:pt-5'>
+                <img src='/app/그림4.png' className='h-16 sm:h-20 md:h-24 lg:h-28 w-auto'/>
             </div>
             <div className='flex text-lg sm:text-2xl md:text-3xl lg:text-4xl xl:text-5xl pt-2 sm:pt-3 md:pt-4 pb-3 sm:pb-5 md:pb-7'>{formattedDate}</div>
             <div className='flex w-auto items-center justify-center'>
                 <p className='flex text-white py-1 bg-[#FF5500] text-lg sm:text-2xl md:text-4xl lg:text-5xl xl:text-7xl font-black px-2 sm:px-3 md:px-4 lg:px-6'>{data[0]}</p>
             </div>
-            <div className='flex flex-col justify-center items-center h-48 sm:h-64 md:h-80 lg:h-96 w-full'>
+            <div className='flex flex-col justify-center items-center h-44 sm:h-56 md:h-72 lg:h-80 w-full'>
                 <div className='grid grid-cols-2 w-full place-items-stretch gap-2 sm:gap-4 md:gap-6'>
                     <div>
                         <p className='flex font-medium text-lg sm:text-2xl md:text-4xl lg:text-5xl xl:text-7xl pt-2 sm:pt-4 md:pt-6 lg:pt-8 px-2 sm:px-4 md:px-6 lg:px-10 pb-1 sm:pb-2 md:pb-3 justify-center text-center'>내가 살때</p>
