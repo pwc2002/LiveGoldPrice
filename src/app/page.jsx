@@ -24,6 +24,7 @@ export default function Home() {
   const playerRef = useRef(null);      // 최신 플레이어 인스턴스(이벤트 리스너에서 접근용)
   const logsRef = useRef([]);          // 로그 원본(최신순) — localStorage 저장의 단일 소스
   const resumeTimeRef = useRef(0);     // remount 후 이어서 재생할 위치(초)
+  const resumeIndexRef = useRef(0);    // remount 후 이어서 재생할 곡 번호(재생목록 인덱스)
   const lastTimeRef = useRef(0);       // 직전 점검 시 재생 위치 — '실제로 흐르는가' 판단용
   const stallTicksRef = useRef(0);     // 연속으로 멈춰있던 점검 횟수
   const hasStartedRef = useRef(false); // 한 번이라도 재생을 시작했는지(최초 재생 전엔 감시 안 함)
@@ -41,6 +42,8 @@ export default function Home() {
   const LOG_KEY = 'goldway_logs';
   const HEALTHY_KEY = 'goldway_lastHealthy';
   const RESUME_KEY = 'goldway_resumeAt';
+  const RESUME_IDX_KEY = 'goldway_resumeIdx';
+  const PLAYLIST_ID = 'PLVefncH6MagHe1l-uPB5jWUeDQokGUlyG';
   const REPORT_URL = 'https://goldway-monitor.vercel.app/api/ingest'; // 원격 모니터 수신 주소
 
   // 화면에 박히는 로그. localStorage에도 저장해 리로드/크래시 후에도 직전 기록이 남도록 한다.
@@ -102,15 +105,21 @@ export default function Home() {
     } catch (e) { addLog(`✗ playVideo 예외: ${e && e.message}`); }
   };
 
-  // 플레이어를 통째로 재생성(remount)하되 직전 위치부터 이어서 재생. 폭주 방지 위해 최소 15초 간격.
+  // 플레이어를 통째로 재생성(remount)하되 직전 곡·위치부터 이어서 재생. 폭주 방지 위해 최소 15초 간격.
   const safeRemount = (atTime) => {
     const now = Date.now();
+    // 지금 몇 번째 곡인지 기억 — 복구 후 같은 곡부터 이어듣기 위함
+    try {
+      const gi = playerRef.current ? playerRef.current.getPlaylistIndex() : -1;
+      if (gi >= 0) resumeIndexRef.current = gi;
+    } catch (e) {}
     // 정상 재생 확인 없이 remount가 3번 연속 실패했으면 remount로는 못 살리는 상태
     // → 재생 위치를 저장하고 페이지 전체를 새로고침(오프라인이면 에러 페이지에 갇히니 온라인일 때만)
     if (remountsSinceHealthyRef.current >= 3 && navigator.onLine !== false) {
       try {
         const t = atTime > 0 ? atTime : resumeTimeRef.current;
         localStorage.setItem(RESUME_KEY, String(Math.floor(t)));
+        localStorage.setItem(RESUME_IDX_KEY, String(resumeIndexRef.current));
       } catch (e) {}
       addLog('⟳ remount로 복구 실패 → 페이지 전체 새로고침');
       beaconReport('reload'); // 리로드 직전 마지막 상태를 모니터로 확실히 전송
@@ -141,12 +150,15 @@ export default function Home() {
       }
       const lastHealthy = localStorage.getItem(HEALTHY_KEY);
       if (lastHealthy) addLog(`이전 세션 마지막 정상: ${lastHealthy}`);
-      // 전체 새로고침으로 재시작된 경우: 저장해둔 위치부터 이어재생
+      // 전체 새로고침으로 재시작된 경우: 저장해둔 곡·위치부터 이어재생
       const resumeAt = parseInt(localStorage.getItem(RESUME_KEY) || '0', 10);
-      if (resumeAt > 0) {
-        resumeTimeRef.current = resumeAt;
+      const resumeIdx = parseInt(localStorage.getItem(RESUME_IDX_KEY) || '0', 10);
+      if (resumeAt > 0 || resumeIdx > 0) {
+        resumeTimeRef.current = resumeAt > 0 ? resumeAt : 0;
+        resumeIndexRef.current = resumeIdx > 0 ? resumeIdx : 0;
         localStorage.removeItem(RESUME_KEY);
-        addLog(`전체 새로고침 복귀 — ${resumeAt}s부터 이어재생 예정`);
+        localStorage.removeItem(RESUME_IDX_KEY);
+        addLog(`전체 새로고침 복귀 — ${resumeIndexRef.current + 1}번째 곡 ${resumeTimeRef.current}s부터 이어재생 예정`);
       }
     } catch (e) {}
     addLog('— 페이지 로드 —'); // 리로드 경계 표시(여기서 끊겨 있으면 직전에 리로드/크래시된 것)
@@ -252,6 +264,11 @@ export default function Home() {
         if (stallTicksRef.current > 0) addLog('✓ 재생 복구됨');
         stallTicksRef.current = 0;
         remountsSinceHealthyRef.current = 0;
+        // 정상 재생 중 현재 곡 번호를 계속 갱신 — 복구 시 이어듣기의 기준값
+        try {
+          const gi = p.getPlaylistIndex();
+          if (gi >= 0) resumeIndexRef.current = gi;
+        } catch (e) {}
         // 심장박동: '여기까지 코드가 살아서 정상 재생 중'을 시각·위치로 갱신(~10초 간격).
         // 화면이 이 시각에 멈춰 있으면 = OS가 페이지/타이머를 얼린 것으로 확정 가능.
         const now2 = Date.now();
@@ -367,18 +384,22 @@ export default function Home() {
   const onReady = (event) => {
     playerRef.current = event.target;
     setPlayer(event.target);
-    if (resumeTimeRef.current > 0) {
-      // remount된 경우: 저장해둔 위치부터 이어서 자동 재생
+    if (resumeTimeRef.current > 0 || resumeIndexRef.current > 0) {
+      // remount/리로드된 경우: 듣던 곡의 듣던 위치부터 이어서 자동 재생
       try {
-        event.target.seekTo(resumeTimeRef.current, true);
-        event.target.playVideo();
+        event.target.loadPlaylist({
+          list: PLAYLIST_ID,
+          listType: 'playlist',
+          index: resumeIndexRef.current,
+          startSeconds: resumeTimeRef.current,
+        });
       } catch (e) {}
       lastTimeRef.current = resumeTimeRef.current;
-      addLog(`✓ remount 완료 — ${Math.floor(resumeTimeRef.current)}s 이어재생`);
+      addLog(`✓ remount 완료 — ${resumeIndexRef.current + 1}번째 곡 ${Math.floor(resumeTimeRef.current)}s 이어재생`);
     } else {
-      // 최초 로드: 자동재생 시도(TV 브라우저는 대개 허용). 막히면 Play 버튼으로 시작.
+      // 최초 로드: 재생목록 첫 곡부터 자동재생 시도. 막히면 Play 버튼으로 시작.
       try { event.target.playVideo(); } catch (e) {}
-      addLog('✓ 플레이어 준비됨 — 자동재생 시도(막히면 Play 버튼)');
+      addLog('✓ 플레이어 준비됨 — 첫 곡부터 자동재생 시도(막히면 Play 버튼)');
     }
   };
 
@@ -420,8 +441,7 @@ export default function Home() {
       iv_load_policy: 3,
       fs: 1,
       cc_load_policy: 0,
-      start: 6,
-      list: 'PLVefncH6MagHe1l-uPB5jWUeDQokGUlyG',
+      list: PLAYLIST_ID,
       listType: 'playlist'
     },
   };
@@ -465,7 +485,6 @@ export default function Home() {
       <div className="flex justify-center items-center w-full h-[50vh] sm:h-[60vh] md:h-[70vh] lg:h-[80vh] xl:h-[90vh]">
         <YouTube
           key={playerKey}
-          videoId="tHjCo2WDByI"
           opts={opts}
           onReady={onReady}
           onStateChange={onStateChange}
