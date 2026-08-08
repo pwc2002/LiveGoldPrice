@@ -47,6 +47,10 @@ public class MainActivity extends Activity {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private long lastPongAt;
 
+    // 보고는 단일 스레드로 직렬화 + 연속 이벤트는 한 번에 묶어 전송(히스토리 동시 쓰기 경합 방지)
+    private final java.util.concurrent.LinkedBlockingQueue<String> pendingLogs = new java.util.concurrent.LinkedBlockingQueue<>();
+    private final java.util.concurrent.ExecutorService reporter = java.util.concurrent.Executors.newSingleThreadExecutor();
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -60,7 +64,17 @@ public class MainActivity extends Activity {
 
     /** 앱단 이벤트·심장박동을 원격 모니터로 전송(실패해도 무시). line이 null이면 상태 갱신만. */
     private void report(String reason, String line, long pongAgeSec) {
-        new Thread(() -> {
+        if (line != null) {
+            String t = new SimpleDateFormat("HH:mm:ss", Locale.KOREA).format(new Date());
+            pendingLogs.offer(t + "  " + line);
+        }
+        reporter.execute(() -> {
+            StringBuilder logs = new StringBuilder();
+            String l;
+            while ((l = pendingLogs.poll()) != null) {
+                if (logs.length() > 0) logs.append(',');
+                logs.append(JSONObject.quote(l));
+            }
             HttpURLConnection c = null;
             try {
                 c = (HttpURLConnection) new URL(REPORT_URL).openConnection();
@@ -71,19 +85,14 @@ public class MainActivity extends Activity {
                 StringBuilder json = new StringBuilder("{\"device\":\"app\",\"reason\":")
                         .append(JSONObject.quote(reason));
                 if (pongAgeSec >= 0) json.append(",\"pongAgeSec\":").append(pongAgeSec);
-                json.append(",\"newLogs\":[");
-                if (line != null) {
-                    String t = new SimpleDateFormat("HH:mm:ss", Locale.KOREA).format(new Date());
-                    json.append(JSONObject.quote(t + "  " + line));
-                }
-                json.append("]}");
+                json.append(",\"newLogs\":[").append(logs).append("]}");
                 c.getOutputStream().write(json.toString().getBytes(StandardCharsets.UTF_8));
                 c.getInputStream().read();
             } catch (Exception ignored) {
             } finally {
                 if (c != null) c.disconnect();
             }
-        }).start();
+        });
     }
 
     /** 어떤 이유로든 죽은 WebView를 버리고 새로 만들어 처음부터 다시 로드한다. */
