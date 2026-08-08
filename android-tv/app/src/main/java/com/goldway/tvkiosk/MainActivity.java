@@ -110,7 +110,9 @@ public class MainActivity extends Activity {
         s.setDomStorageEnabled(true);                  // 페이지가 진단 로그·이어재생 위치를 localStorage에 남긴다
         s.setMediaPlaybackRequiresUserGesture(false);  // 사용자 조작 없이 자동재생 허용
         s.setUseWideViewPort(true);                    // 페이지의 viewport meta(width=1280)를 존중
-        s.setLoadWithOverviewMode(true);               // 콘텐츠 폭을 화면 폭에 맞게 스케일
+        // 1280px 레이아웃이 화면 폭에 정확히 맞도록 스케일 고정(밀도 보정으로 인한 과확대 방지)
+        int scale = (int) Math.round(getResources().getDisplayMetrics().widthPixels * 100.0 / 1280.0);
+        wv.setInitialScale(scale);
 
         wv.setWebChromeClient(new WebChromeClient());
         wv.setWebViewClient(new WebViewClient() {
