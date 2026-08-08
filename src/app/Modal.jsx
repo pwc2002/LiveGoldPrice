@@ -36,22 +36,22 @@ function Modal({data}){
                 </div>
                 <div className='grid grid-cols-2 w-full justify-items-center gap-2 sm:gap-4 md:gap-6'>
                     <div className="w-full">
-                        <div className={`flex font-medium py-2 px-1 sm:py-3 lg:py-4 justify-center text-center whitespace-nowrap ${data[1]==0 ? "text-sm sm:text-lg md:text-2xl lg:text-3xl xl:text-6xl" : "text-lg sm:text-2xl md:text-4xl lg:text-6xl xl:text-[5.5rem]"}`}>
+                        <div className={`flex font-medium py-2 px-1 sm:py-3 lg:py-4 justify-center text-center whitespace-nowrap ${data[1]==0 ? "text-sm sm:text-lg md:text-2xl lg:text-3xl xl:text-6xl" : "text-lg sm:text-2xl md:text-4xl lg:text-6xl xl:text-[5rem]"}`}>
                             {data[1]==0 ? "제품 시세 적용" : new Intl.NumberFormat('ko-KR', { style: 'decimal' }).format(data[1]) +"원"}
                         </div>
                         {data[1] != 0 && (
                             <div className={`flex font-medium justify-center text-center text-xs sm:text-sm md:text-lg lg:text-2xl xl:text-5xl ${data[3] > 0 ? 'text-red-600' : data[3] < 0 ? 'text-blue-600' : 'text-gray-600'}`}>
-                                ({data[3] > 0 ? "▲" : data[3] < 0 ? "▼" : ""}{new Intl.NumberFormat('ko-KR', { style: 'decimal' }).format(data[3])})
+                                ({data[3] > 0 ? "▲" : data[3] < 0 ? "▼" : ""}{new Intl.NumberFormat('ko-KR', { style: 'decimal' }).format(Math.abs(data[3]))})
                             </div>
                         )}
                     </div>
                     <div className="w-full">
-                        <div className={`flex font-medium py-2 px-1 sm:py-3 lg:py-4 justify-center text-center whitespace-nowrap ${data[2]==0 ? "text-sm sm:text-lg md:text-2xl lg:text-3xl xl:text-6xl" : "text-lg sm:text-2xl md:text-4xl lg:text-6xl xl:text-[5.5rem]"}`}>
+                        <div className={`flex font-medium py-2 px-1 sm:py-3 lg:py-4 justify-center text-center whitespace-nowrap ${data[2]==0 ? "text-sm sm:text-lg md:text-2xl lg:text-3xl xl:text-6xl" : "text-lg sm:text-2xl md:text-4xl lg:text-6xl xl:text-[5rem]"}`}>
                             {data[2]==0 ? "제품 시세 적용" : new Intl.NumberFormat('ko-KR', { style: 'decimal' }).format(data[2]) +"원"}
                         </div>
                         {data[2] != 0 && (
                             <div className={`flex font-medium justify-center text-center text-xs sm:text-sm md:text-lg lg:text-2xl xl:text-5xl ${data[4] > 0 ? 'text-red-600' : data[4] < 0 ? 'text-blue-600' : 'text-gray-600'}`}>
-                                ({data[4] > 0 ? "▲" : data[4] < 0 ? "▼" :  ""}{new Intl.NumberFormat('ko-KR', { style: 'decimal' }).format(data[4])})
+                                ({data[4] > 0 ? "▲" : data[4] < 0 ? "▼" :  ""}{new Intl.NumberFormat('ko-KR', { style: 'decimal' }).format(Math.abs(data[4]))})
                             </div>
                         )}
                     </div>
