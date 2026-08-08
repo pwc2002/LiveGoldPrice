@@ -30,9 +30,12 @@ export default function Home() {
   const lastRemountAtRef = useRef(0);  // 마지막 remount 시각(ms) — remount 폭주 방지
   const remountCountRef = useRef(0);   // remount 누적 횟수(로그용)
   const lastHbAtRef = useRef(0);       // 마지막 심장박동 갱신 시각(ms) — 재렌더 줄이려 ~10초 간격
+  const lastIframeMsgAtRef = useRef(0);      // 유튜브 iframe이 마지막으로 postMessage를 보낸 시각 — 좀비 재생 감지용
+  const remountsSinceHealthyRef = useRef(0); // 정상 재생 확인 없이 연속된 remount 횟수 — 초과 시 전체 리로드
 
   const LOG_KEY = 'goldway_logs';
   const HEALTHY_KEY = 'goldway_lastHealthy';
+  const RESUME_KEY = 'goldway_resumeAt';
 
   // 화면에 박히는 로그. localStorage에도 저장해 리로드/크래시 후에도 직전 기록이 남도록 한다.
   const addLog = (msg) => {
@@ -56,6 +59,17 @@ export default function Home() {
   // 플레이어를 통째로 재생성(remount)하되 직전 위치부터 이어서 재생. 폭주 방지 위해 최소 15초 간격.
   const safeRemount = (atTime) => {
     const now = Date.now();
+    // 정상 재생 확인 없이 remount가 3번 연속 실패했으면 remount로는 못 살리는 상태
+    // → 재생 위치를 저장하고 페이지 전체를 새로고침(오프라인이면 에러 페이지에 갇히니 온라인일 때만)
+    if (remountsSinceHealthyRef.current >= 3 && navigator.onLine !== false) {
+      try {
+        const t = atTime > 0 ? atTime : resumeTimeRef.current;
+        localStorage.setItem(RESUME_KEY, String(Math.floor(t)));
+      } catch (e) {}
+      addLog('⟳ remount로 복구 실패 → 페이지 전체 새로고침');
+      setTimeout(() => { try { location.reload(); } catch (e) {} }, 300);
+      return;
+    }
     if (now - lastRemountAtRef.current < 15000) {
       forcePlay('remount 대기중');
       return;
@@ -64,6 +78,7 @@ export default function Home() {
     if (atTime > 0) resumeTimeRef.current = atTime;
     stallTicksRef.current = 0;
     remountCountRef.current += 1;
+    remountsSinceHealthyRef.current += 1;
     addLog(`⟳ remount #${remountCountRef.current} → ${Math.floor(resumeTimeRef.current)}s 이어재생`);
     setPlayerKey((k) => k + 1);
   };
@@ -79,8 +94,25 @@ export default function Home() {
       }
       const lastHealthy = localStorage.getItem(HEALTHY_KEY);
       if (lastHealthy) addLog(`이전 세션 마지막 정상: ${lastHealthy}`);
+      // 전체 새로고침으로 재시작된 경우: 저장해둔 위치부터 이어재생
+      const resumeAt = parseInt(localStorage.getItem(RESUME_KEY) || '0', 10);
+      if (resumeAt > 0) {
+        resumeTimeRef.current = resumeAt;
+        localStorage.removeItem(RESUME_KEY);
+        addLog(`전체 새로고침 복귀 — ${resumeAt}s부터 이어재생 예정`);
+      }
     } catch (e) {}
     addLog('— 페이지 로드 —'); // 리로드 경계 표시(여기서 끊겨 있으면 직전에 리로드/크래시된 것)
+
+    // 좀비 재생 감지용: 유튜브 iframe은 재생 중일 때 postMessage(infoDelivery)를 계속 보낸다.
+    // 이 수신 시각이 갱신되지 않는데 API는 '재생 중'이라면 iframe 내부만 죽은 것.
+    const onMsg = (e) => {
+      if ((typeof e.origin === 'string' && e.origin.indexOf('youtube') !== -1) ||
+          (typeof e.data === 'string' && e.data.indexOf('infoDelivery') !== -1)) {
+        lastIframeMsgAtRef.current = Date.now();
+      }
+    };
+    window.addEventListener('message', onMsg);
 
     const onErr = (e) => {
       const where = e.filename ? ` @${(e.filename + '').split('/').pop()}:${e.lineno}` : '';
@@ -93,6 +125,7 @@ export default function Home() {
     window.addEventListener('error', onErr);
     window.addEventListener('unhandledrejection', onRej);
     return () => {
+      window.removeEventListener('message', onMsg);
       window.removeEventListener('error', onErr);
       window.removeEventListener('unhandledrejection', onRej);
     };
@@ -161,8 +194,17 @@ export default function Home() {
       lastTimeRef.current = t;
 
       if (state === 1 && advanced) {
+        // 좀비 재생 감지: API는 '재생 중·시간 흐름'이라는데 iframe에서 12초 넘게 postMessage가 없다
+        // → iframe 내부가 죽고 바깥 API가 시간만 외삽 중. 위치 기반 감시로는 안 잡히므로 여기서 잡는다.
+        const sinceMsg = lastIframeMsgAtRef.current > 0 ? Date.now() - lastIframeMsgAtRef.current : 0;
+        if (sinceMsg > 12000) {
+          addLog(`⚠ 좀비 재생 감지(iframe ${Math.floor(sinceMsg / 1000)}초 무응답) → remount`);
+          safeRemount(t);
+          return;
+        }
         if (stallTicksRef.current > 0) addLog('✓ 재생 복구됨');
         stallTicksRef.current = 0;
+        remountsSinceHealthyRef.current = 0;
         // 심장박동: '여기까지 코드가 살아서 정상 재생 중'을 시각·위치로 갱신(~10초 간격).
         // 화면이 이 시각에 멈춰 있으면 = OS가 페이지/타이머를 얼린 것으로 확정 가능.
         const now2 = Date.now();
