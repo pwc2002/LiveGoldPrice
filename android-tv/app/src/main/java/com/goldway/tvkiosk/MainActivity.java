@@ -109,6 +109,8 @@ public class MainActivity extends Activity {
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);                  // 페이지가 진단 로그·이어재생 위치를 localStorage에 남긴다
         s.setMediaPlaybackRequiresUserGesture(false);  // 사용자 조작 없이 자동재생 허용
+        s.setUseWideViewPort(true);                    // 페이지의 viewport meta(width=1280)를 존중
+        s.setLoadWithOverviewMode(true);               // 콘텐츠 폭을 화면 폭에 맞게 스케일
 
         wv.setWebChromeClient(new WebChromeClient());
         wv.setWebViewClient(new WebViewClient() {
