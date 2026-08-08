@@ -33,17 +33,63 @@ export default function Home() {
   const lastIframeMsgAtRef = useRef(0);      // 유튜브 iframe이 마지막으로 postMessage를 보낸 시각 — 좀비 재생 감지용
   const remountsSinceHealthyRef = useRef(0); // 정상 재생 확인 없이 연속된 remount 횟수 — 초과 시 전체 리로드
 
+  const totalLogsRef = useRef(0);      // addLog 누적 횟수 — 원격 보고 시 미전송분 계산용
+  const sentLogsRef = useRef(0);       // 원격 모니터로 보고 완료된 누적 횟수
+  const reportTimerRef = useRef(null); // 로그 발생 시 몰아서 보내는 전송 예약 타이머
+  const hbRef = useRef(null);          // 최신 심장박동 문자열(보고 페이로드용)
+
   const LOG_KEY = 'goldway_logs';
   const HEALTHY_KEY = 'goldway_lastHealthy';
   const RESUME_KEY = 'goldway_resumeAt';
+  const REPORT_URL = 'https://goldway-monitor.vercel.app/api/ingest'; // 원격 모니터 수신 주소
 
   // 화면에 박히는 로그. localStorage에도 저장해 리로드/크래시 후에도 직전 기록이 남도록 한다.
   const addLog = (msg) => {
     const t = new Date().toTimeString().slice(0, 8); // HH:MM:SS
     const next = [`${t}  ${msg}`, ...logsRef.current].slice(0, 40);
     logsRef.current = next;
+    totalLogsRef.current += 1;
     setLogs(next);
     try { localStorage.setItem(LOG_KEY, JSON.stringify(next)); } catch (e) {}
+    scheduleReport(); // 새 로그는 원격 모니터로도 전송(2초 내 몰아서)
+  };
+
+  // === 원격 모니터 보고: 로그·재생 상태를 goldway-monitor로 전송 ===
+  const buildReport = (reason) => {
+    let state = null, pos = null;
+    try { state = playerRef.current ? playerRef.current.getPlayerState() : null; } catch (e) {}
+    try { pos = playerRef.current ? Math.floor(playerRef.current.getCurrentTime()) : null; } catch (e) {}
+    const unsent = Math.min(totalLogsRef.current - sentLogsRef.current, logsRef.current.length);
+    const newLogs = unsent > 0 ? logsRef.current.slice(0, unsent).reverse() : [];
+    const body = JSON.stringify({
+      device: 'page', reason, state, position: pos,
+      heartbeat: hbRef.current, remounts: remountCountRef.current, newLogs,
+    });
+    return { body, count: totalLogsRef.current };
+  };
+
+  // content-type을 지정하지 않으면 text/plain이라 CORS preflight 없이 전송된다
+  const sendReport = (reason) => {
+    const { body, count } = buildReport(reason);
+    fetch(REPORT_URL, { method: 'POST', body, keepalive: true })
+      .then((r) => { if (r.ok) sentLogsRef.current = count; })
+      .catch(() => {});
+  };
+
+  // 리로드/화면전환 직전용: 응답을 기다릴 수 없을 때도 전송이 보장되는 beacon
+  const beaconReport = (reason) => {
+    try {
+      const { body, count } = buildReport(reason);
+      if (navigator.sendBeacon && navigator.sendBeacon(REPORT_URL, body)) sentLogsRef.current = count;
+    } catch (e) {}
+  };
+
+  const scheduleReport = () => {
+    if (reportTimerRef.current) return; // 이미 예약됨 — 몰아서 1번만
+    reportTimerRef.current = setTimeout(() => {
+      reportTimerRef.current = null;
+      sendReport('log');
+    }, 2000);
   };
 
   // 어떤 이유로든 멈췄을 때 가장 먼저 시도하는 가벼운 복구: 현재 플레이어에 재생 명령.
@@ -67,6 +113,7 @@ export default function Home() {
         localStorage.setItem(RESUME_KEY, String(Math.floor(t)));
       } catch (e) {}
       addLog('⟳ remount로 복구 실패 → 페이지 전체 새로고침');
+      beaconReport('reload'); // 리로드 직전 마지막 상태를 모니터로 확실히 전송
       setTimeout(() => { try { location.reload(); } catch (e) {} }, 300);
       return;
     }
@@ -212,6 +259,7 @@ export default function Home() {
           lastHbAtRef.current = now2;
           const hb = `${new Date().toTimeString().slice(0, 8)} · ${Math.floor(t)}s`;
           setHeartbeat(hb);
+          hbRef.current = hb;
           try { localStorage.setItem(HEALTHY_KEY, hb); } catch (e) {}
         }
         return;
@@ -260,6 +308,23 @@ export default function Home() {
       window.removeEventListener('online', onOnline);
       window.removeEventListener('pageshow', onPageShow);
       document.removeEventListener('resume', onAppResume);
+    };
+  }, []);
+
+  // === 원격 모니터 정기 보고: 30초마다 상태 전송 + 화면 이탈 시 beacon ===
+  // 보고가 끊긴 시각 = 페이지가 죽은 시각이므로, 완전 동결도 모니터에서 원격으로 확인된다.
+  useEffect(() => {
+    const first = setTimeout(() => sendReport('boot'), 3000);
+    const id = setInterval(() => sendReport('interval'), 30000);
+    const onHide = () => { if (document.visibilityState === 'hidden') beaconReport('hidden'); };
+    const onPageHide = () => beaconReport('pagehide');
+    document.addEventListener('visibilitychange', onHide);
+    window.addEventListener('pagehide', onPageHide);
+    return () => {
+      clearTimeout(first);
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onHide);
+      window.removeEventListener('pagehide', onPageHide);
     };
   }, []);
 
